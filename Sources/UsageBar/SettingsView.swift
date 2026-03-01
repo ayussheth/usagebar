@@ -229,6 +229,19 @@ struct ServiceConfigRow: View {
                             .onChange(of: config.apiKey) { _ in onSave() }
                     }
                     HStack {
+                        Text("Tracking")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary)
+                            .frame(width: 80, alignment: .leading)
+                        Picker("", selection: $config.trackingMode) {
+                            ForEach(ServiceConfig.TrackingMode.allCases, id: \.self) { mode in
+                                Text(mode.rawValue).tag(mode)
+                            }
+                        }
+                        .frame(width: 150)
+                        .onChange(of: config.trackingMode) { _ in onSave() }
+                    }
+                    HStack {
                         Text("Reset hour")
                             .font(.system(size: 10, design: .monospaced))
                             .foregroundColor(.secondary)

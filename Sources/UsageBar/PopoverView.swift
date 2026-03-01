@@ -134,85 +134,76 @@ struct ServiceRow: View {
         }
     }
 
+    private var headerSection: some View {
+        HStack {
+            Image(systemName: serviceIcon)
+                .font(.system(size: 12))
+                .foregroundColor(statusColor)
+                .frame(width: 20)
+            Text(config.name)
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+            Spacer()
+            if snapshot.limitReached {
+                Text("MAXED")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.red)
+                    .cornerRadius(3)
+            } else {
+                Circle().fill(statusColor).frame(width: 6, height: 6)
+            }
+        }
+    }
+
+    private var dailySection: some View {
+        VStack(spacing: 3) {
+            HStack {
+                Text("daily").font(.system(size: 9, design: .monospaced)).foregroundColor(.secondary)
+                Spacer()
+                Text("\(snapshot.dailyUsed)/\(config.dailyLimit)")
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundColor(dailyPct >= 1.0 ? .red : .primary)
+            }
+            ProgressView(value: dailyPct)
+                .tint(dailyPct >= 1.0 ? .red : dailyPct >= 0.8 ? .orange : .blue)
+                .scaleEffect(x: 1, y: 0.6)
+        }
+    }
+
+    private var weeklySection: some View {
+        VStack(spacing: 3) {
+            HStack {
+                Text("weekly").font(.system(size: 9, design: .monospaced)).foregroundColor(.secondary)
+                Spacer()
+                Text("\(snapshot.weeklyUsed)/\(config.weeklyLimit)")
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundColor(weeklyPct >= 1.0 ? .red : .primary)
+            }
+            ProgressView(value: weeklyPct)
+                .tint(weeklyPct >= 1.0 ? .red : weeklyPct >= 0.8 ? .orange : .blue)
+                .scaleEffect(x: 1, y: 0.6)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 8) {
-            // Header
+            headerSection
+            dailySection
+            weeklySection
+            if let detail = snapshot.detail, !detail.isEmpty {
+                Text(detail).font(.system(size: 9, design: .monospaced)).foregroundColor(.blue)
+            }
             HStack {
-                Image(systemName: serviceIcon)
-                    .font(.system(size: 12))
-                    .foregroundColor(statusColor)
-                    .frame(width: 20)
-
-                Text(config.name)
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-
-                Spacer()
-
-                if snapshot.limitReached {
-                    Text("MAXED")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.red)
-                        .cornerRadius(3)
-                } else {
-                    Circle()
-                        .fill(statusColor)
-                        .frame(width: 6, height: 6)
-                }
-            }
-
-            // Daily bar
-            VStack(spacing: 3) {
-                HStack {
-                    Text("daily")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text("\(snapshot.dailyUsed)/\(config.dailyLimit)")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(dailyPct >= 1.0 ? .red : .primary)
-                }
-                ProgressView(value: dailyPct)
-                    .tint(dailyPct >= 1.0 ? .red : dailyPct >= 0.8 ? .orange : .blue)
-                    .scaleEffect(x: 1, y: 0.6)
-            }
-
-            // Weekly bar
-            VStack(spacing: 3) {
-                HStack {
-                    Text("weekly")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Text("\(snapshot.weeklyUsed)/\(config.weeklyLimit)")
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(weeklyPct >= 1.0 ? .red : .primary)
-                }
-                ProgressView(value: weeklyPct)
-                    .tint(weeklyPct >= 1.0 ? .red : weeklyPct >= 0.8 ? .orange : .accentColor)
-                    .scaleEffect(x: 1, y: 0.6)
-            }
-
-            // Countdown
-            HStack {
-                Image(systemName: "clock")
-                    .font(.system(size: 8))
-                    .foregroundColor(.gray)
+                Image(systemName: "clock").font(.system(size: 8)).foregroundColor(.gray)
                 Text("resets \(store.timeUntil(snapshot.dailyResetsAt))")
-                    .font(.system(size: 9, design: .monospaced))
-                    .foregroundColor(.gray)
+                    .font(.system(size: 9, design: .monospaced)).foregroundColor(.gray)
                 Spacer()
-
-                // Manual increment for local tracking
                 Button(action: { store.incrementUsage(service: config.name) }) {
-                    Image(systemName: "plus.circle")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
+                    Image(systemName: "plus.circle").font(.system(size: 11)).foregroundColor(.secondary)
                 }
-                .buttonStyle(.plain)
-                .help("Log a usage")
+                .buttonStyle(.plain).help("Log a usage")
             }
         }
         .padding(12)
