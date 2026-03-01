@@ -330,25 +330,22 @@ class UsageStore: ObservableObject {
     // MARK: - Connection tests
 
     private func testAnthropicKey(apiKey: String, completion: @escaping (Bool, String) -> Void) {
-        var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/messages")!)
-        req.httpMethod = "POST"
+        // Use /v1/models to validate key without spending tokens
+        var req = URLRequest(url: URL(string: "https://api.anthropic.com/v1/models")!)
         req.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         req.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "model": "claude-sonnet-4-20250514", "max_tokens": 1,
-            "messages": [["role": "user", "content": "hi"]]
-        ])
         URLSession.shared.dataTask(with: req) { _, response, error in
             if let error = error {
                 completion(false, error.localizedDescription)
                 return
             }
             if let http = response as? HTTPURLResponse {
-                if http.statusCode == 200 || http.statusCode == 429 {
+                if http.statusCode == 200 {
                     completion(true, "API key valid")
                 } else if http.statusCode == 401 {
                     completion(false, "Invalid API key")
+                } else if http.statusCode == 429 {
+                    completion(true, "Valid (rate limited)")
                 } else {
                     completion(true, "Connected (status \(http.statusCode))")
                 }
@@ -408,22 +405,46 @@ class UsageStore: ObservableObject {
     }
 
     private func fetchXAIUsage(apiKey: String, completion: @escaping (Int, Int, String) -> Void) {
+        // Use /v1/api-key endpoint to check key info, then try a lightweight call for headers
         var req = URLRequest(url: URL(string: "https://api.x.ai/v1/chat/completions")!)
         req.httpMethod = "POST"
         req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try? JSONSerialization.data(withJSONObject: [
-            "model": "grok-3-mini", "max_tokens": 1,
-            "messages": [["role": "user", "content": "."]]
+            "model": "grok-3-mini-fast", "max_tokens": 1, "stream": false,
+            "messages": [["role": "user", "content": "1"]]
         ])
-        URLSession.shared.dataTask(with: req) { _, response, _ in
+        URLSession.shared.dataTask(with: req) { data, response, error in
+            if let error = error {
+                completion(0, 0, "Error: \(error.localizedDescription)")
+                return
+            }
             if let http = response as? HTTPURLResponse {
-                let remaining = Int(http.value(forHTTPHeaderField: "x-ratelimit-remaining-requests") ?? "") ?? 0
-                let limit = Int(http.value(forHTTPHeaderField: "x-ratelimit-limit-requests") ?? "") ?? 0
-                let used = limit > 0 ? limit - remaining : 0
-                completion(used, remaining, "\(remaining)/\(limit) requests remaining")
-            } else {
-                completion(0, 0, "Fetch failed")
+                // Check all common rate limit header formats
+                let headers = http.allHeaderFields
+                var remaining = 0, limit = 0
+
+                for (key, value) in headers {
+                    let k = "\(key)".lowercased()
+                    if k.contains("ratelimit") && k.contains("remaining") && k.contains("request") {
+                        remaining = Int("\(value)") ?? 0
+                    }
+                    if k.contains("ratelimit") && k.contains("limit") && !k.contains("remaining") && !k.contains("reset") && k.contains("request") {
+                        limit = Int("\(value)") ?? 0
+                    }
+                }
+
+                if limit > 0 {
+                    let used = limit - remaining
+                    completion(used, remaining, "\(used) used · \(remaining)/\(limit) remaining")
+                } else if http.statusCode == 200 {
+                    // No rate limit headers but API works
+                    completion(0, 0, "Connected · rate limits not exposed")
+                } else if http.statusCode == 429 {
+                    completion(0, 0, "Rate limited — try again later")
+                } else {
+                    completion(0, 0, "Status \(http.statusCode)")
+                }
             }
         }.resume()
     }
